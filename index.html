@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="id" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulasi Busur Derajat 180°</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Nunito', sans-serif; }
+
+    .glow-line { filter: drop-shadow(0 0 4px currentColor); }
+    .angle-arc { fill: none; stroke-linecap: round; transition: stroke 0.2s ease, fill 0.2s ease; }
+    .pulse-dot { animation: pulse-ring 2s ease-out infinite; }
+
+    @keyframes pulse-ring {
+      0% { r: 6; opacity: 0.8; }
+      100% { r: 18; opacity: 0; }
+    }
+
+    .handle-hover:hover {
+      cursor: grab;
+      transform: scale(1.2);
+      transition: transform 0.15s ease;
+    }
+    .handle-hover:active { cursor: grabbing; }
+
+    .scenario-btn { transition: all 0.2s ease; }
+    .scenario-btn:hover { transform: translateY(-2px); }
+    .scenario-btn.active { box-shadow: 0 0 0 2px var(--primary-action), 0 4px 12px rgba(0,0,0,0.3); background: var(--primary-action) !important; color: var(--bg-color) !important; }
+
+    .result-card {
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .tick-text { user-select: none; pointer-events: none; }
+
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Animasi transisi warna halus */
+    circle, line, path, text {
+      transition: stroke 0.15s ease, fill 0.15s ease, color 0.15s ease;
+    }
+
+    :root {
+      --bg-color: #0f172a;
+      --surface-color: #1e293b;
+      --text-color: #e2e8f0;
+      --primary-action: #38bdf8;
+      --secondary-action: #f472b6;
+    }
+  </style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+</head>
+<body style="background: var(--bg-color); color: var(--text-color);" class="h-full">
+  <div id="app-wrapper" class="h-full w-full flex flex-col overflow-auto" style="background: var(--bg-color);">
+    <header class="w-full px-4 py-3 flex items-center justify-between flex-shrink-0 z-10" style="background: var(--surface-color); border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--primary-action);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12" /><path d="M2 12h10l7-7" />
+          </svg>
+        </div>
+        <div>
+          <h1 id="app-title" class="text-lg font-extrabold leading-tight" style="color: var(--text-color);">Simulasi Busur Derajat</h1>
+          <p id="instruction-text" class="text-xs opacity-60" style="color: var(--text-color);">Seret garis di area busur 0°-180°</p>
+        </div>
+      </div>
+      <div id="angle-display" class="result-card rounded-xl px-4 py-2 text-center" style="background: rgba(30,41,59,0.9);">
+        <div class="text-xs opacity-50 font-semibold uppercase tracking-wider" style="color: var(--text-color);">Besar Sudut</div>
+        <div id="angle-value" class="text-2xl font-black" style="font-family: 'JetBrains Mono', monospace; color: var(--primary-action);">0°</div>
+      </div>
+    </header>
+
+    <div class="flex-1 flex flex-col w-full min-h-0 relative">
+      <div class="absolute top-4 left-4 right-4 z-10 flex flex-col gap-3 pointer-events-none">
+        <div id="scenario-buttons" class="flex gap-2 flex-wrap pointer-events-auto"></div>
+        
+        <div id="info-overlay" class="result-card rounded-xl p-3 inline-block fade-in pointer-events-auto max-w-sm" style="background: rgba(15,23,42,0.85);">
+          <div class="flex items-start gap-2">
+            <i data-lucide="info" style="width:16px;height:16px;color:var(--primary-action);flex-shrink:0;margin-top:2px;"></i>
+            <div>
+              <div id="info-title" class="text-sm font-bold" style="color: var(--primary-action);"></div>
+              <div id="info-desc" class="text-xs opacity-70 mt-1" style="color: var(--text-color);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="calc-panel" class="absolute top-4 right-4 z-10 pointer-events-auto max-w-[240px] hidden md:block">
+        <div class="result-card rounded-xl p-4 shadow-xl" style="background: var(--surface-color); border: 1px solid rgba(255,255,255,0.08);">
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="calculator" style="width:14px;height:14px;color:var(--secondary-action);"></i> 
+            <span class="text-xs font-bold uppercase tracking-wider opacity-60">Perhitungan</span>
+          </div>
+          <div id="calc-content" class="grid grid-cols-1 gap-2 text-sm"></div>
+        </div>
+      </div>
+
+      <div class="w-full h-full relative" style="background: radial-gradient(circle at 50% 90%, rgba(56, 189, 248, 0.05) 0%, transparent 60%);">
+        <svg id="protractor-svg" class="w-full h-full" preserveAspectRatio="xMidYMid meet">
+          <g id="static-layer"></g>
+          <g id="dynamic-layer"></g>
+        </svg>
+      </div>
+
+      <div id="mobile-calc" class="w-full px-4 pb-4 flex-shrink-0 block md:hidden z-10">
+        <div class="result-card rounded-xl p-3" style="background: var(--surface-color); border: 1px solid rgba(255,255,255,0.08);">
+          <div id="mobile-calc-content" class="flex justify-between items-center text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+// ─── CONFIG & STATE ────────────────────────────────────────
+const defaultConfig = {
+  app_title: 'Simulasi Busur Derajat',
+  instruction_text: 'Seret garis untuk mengukur sudut',
+  background_color: '#0f172a',
+  surface_color: '#1e293b',
+  text_color: '#e2e8f0',
+  primary_action: '#38bdf8',
+  secondary_action: '#f472b6',
+  font_family: 'Nunito',
+  font_size: 16
+};
+
+const scenarios = [
+  { id: 'standard', name: 'Mode Standar', icon: 'compass', desc: 'Satu Titik Tetap (0°)', detail: 'Garis merah muda terkunci di 0°. Seret garis lainnya untuk mengukur sudut.', line1Angle: 0, line2Angle: 60 },
+  { id: 'free', name: 'Mode Bebas', icon: 'move', desc: 'Pengukuran Bebas', detail: 'Seret kedua sisi secara bebas antara 0° hingga 180° untuk mencari selisih sudut.', line1Angle: 45, line2Angle: 135 }
+];
+
+let currentScenario = scenarios[0];
+let line1Angle = 0;
+let line2Angle = 60;
+let dragging = null; 
+let svgRect = null;
+let centerX = 0, centerY = 0, radius = 0;
+let isStaticLayerBuilt = false;
+let animationFrameId = null;
+
+const svgEl = document.getElementById('protractor-svg');
+const staticLayer = document.getElementById('static-layer');
+const dynamicLayer = document.getElementById('dynamic-layer');
+
+// ─── UTILS ─────────────────────────────────────────────────
+function polarToCart(cx, cy, r, angleDeg) {
+  const rad = -angleDeg * Math.PI / 180;
+  return { 
+    x: cx + r * Math.cos(rad), 
+    y: cy + r * Math.sin(rad) 
+  };
+}
+
+function getMeasuredAngle() {
+  return Math.abs(line2Angle - line1Angle);
+}
+
+// Fungsi Warna Dinamis berdasarkan Jenis Sudut
+function getDynamicColor(angle, baseColor) {
+  if (angle === 0) return '#94a3b8'; // Abu-abu (Nol)
+  if (angle > 0 && angle < 90) return baseColor; // Biru/Tema Utama (Lancip)
+  if (angle === 90) return '#22c55e'; // Hijau (Siku-siku)
+  if (angle > 90 && angle < 180) return '#f97316'; // Oranye (Tumpul)
+  if (angle === 180) return '#a855f7'; // Ungu (Lurus)
+  return baseColor;
+}
+
+function updateSvgDimensions() {
+  svgRect = svgEl.getBoundingClientRect();
+  const w = svgRect.width || 800;
+  const h = svgRect.height || 500;
+  svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  
+  centerX = w / 2;
+  centerY = h - (h * 0.15); 
+  
+  const maxWidth = (w * 0.85) / 2; 
+  const maxHeight = centerY - (h * 0.1); 
+  radius = Math.min(maxWidth, maxHeight);
+}
+
+// ─── SVG DRAWING ───────────────────────────────────────────
+function buildProtractor(forceRebuildStatic = false) {
+  if (!svgRect || forceRebuildStatic) updateSvgDimensions();
+
+  const basePrimaryColor = (window.elementSdk?.config.primary_action) || defaultConfig.primary_action;
+  const secondaryColor = (window.elementSdk?.config.secondary_action) || defaultConfig.secondary_action;
+  const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
+
+  const measuredAngle = getMeasuredAngle();
+  
+  // Dapatkan warna dinamis sesuai besaran sudut
+  const dynamicColor = getDynamicColor(measuredAngle, basePrimaryColor);
+
+  // LAYER STATIS
+  if (!isStaticLayerBuilt || forceRebuildStatic) {
+    let staticContent = '';
+    
+    staticContent += `<path d="M ${centerX + radius + 15} ${centerY} A ${radius + 15} ${radius + 15} 0 0 0 ${centerX - radius - 15} ${centerY} Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" stroke-width="1.5"/>`;
+    staticContent += `<line x1="${centerX - radius - 25}" y1="${centerY}" x2="${centerX + radius + 25}" y2="${centerY}" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>`;
+    staticContent += `<circle cx="${centerX}" cy="${centerY}" r="6" fill="none" stroke="${textColor}" stroke-width="1.5" opacity="0.6"/>`;
+    staticContent += `<line x1="${centerX}" y1="${centerY - 10}" x2="${centerX}" y2="${centerY + 10}" stroke="${textColor}" stroke-width="1" opacity="0.6"/>`;
+
+    for (let deg = 0; deg <= 180; deg += 1) {
+      const isMajor = deg % 10 === 0;
+      const isMid = deg % 5 === 0;
+      if (!isMajor && !isMid && deg % 1 !== 0) continue;
+
+      let tickLen = isMajor ? 18 : isMid ? 10 : 5;
+      const outerP = polarToCart(centerX, centerY, radius, deg);
+      const innerP = polarToCart(centerX, centerY, radius - tickLen, deg);
+      const opacity = isMajor ? 0.7 : isMid ? 0.4 : 0.2;
+
+      staticContent += `<line x1="${outerP.x}" y1="${outerP.y}" x2="${innerP.x}" y2="${innerP.y}" stroke="${textColor}" stroke-width="${isMajor ? 1.5 : 0.8}" opacity="${opacity}"/>`;
+
+      if (isMajor) {
+        const labelP1 = polarToCart(centerX, centerY, radius - 32, deg);
+        staticContent += `<text x="${labelP1.x}" y="${labelP1.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.8" style="font-size:${radius > 250 ? 14 : 10}px; font-family: 'JetBrains Mono', monospace; font-weight:700;">${deg}</text>`;
+        
+        if(radius > 150) {
+            const labelP2 = polarToCart(centerX, centerY, radius - 55, deg);
+            staticContent += `<text x="${labelP2.x}" y="${labelP2.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.3" style="font-size:${radius > 250 ? 11 : 8}px; font-family: 'JetBrains Mono', monospace; font-weight:600;">${180 - deg}</text>`;
+        }
+      }
+    }
+    staticLayer.innerHTML = staticContent;
+    isStaticLayerBuilt = true;
+  }
+
+  // LAYER DINAMIS
+  let dynamicContent = '';
+  const arcRadius = radius * 0.35;
+  
+  let minA = Math.min(line1Angle, line2Angle);
+  let maxA = Math.max(line1Angle, line2Angle);
+
+  // Gambar area dalam/arsiran sudut
+  if (measuredAngle > 0) {
+    if (measuredAngle === 90) {
+      // Simbol Kotak Siku-siku (∟) jika 90 derajat
+      const sqLen = arcRadius * 0.6;
+      const p1 = polarToCart(centerX, centerY, sqLen, minA);
+      const p2 = polarToCart(centerX, centerY, sqLen, maxA);
+      const pMid = polarToCart(centerX, centerY, sqLen * 1.414, minA + 45); // Sudut siku-siku terluar
+      
+      dynamicContent += `<path d="M ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y}" class="angle-arc" stroke="${dynamicColor}" stroke-width="3" opacity="0.9"/>`;
+      dynamicContent += `<path d="M ${centerX} ${centerY} L ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y} Z" fill="${dynamicColor}" opacity="0.25"/>`;
+    } else {
+      // Lengkungan (Arc) biasa untuk sudut lainnya
+      const start = polarToCart(centerX, centerY, arcRadius, minA);
+      const end = polarToCart(centerX, centerY, arcRadius, maxA);
+      
+      dynamicContent += `<path d="M ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y}" class="angle-arc" stroke="${dynamicColor}" stroke-width="3" opacity="0.6"/>`;
+      dynamicContent += `<path d="M ${centerX} ${centerY} L ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y} Z" fill="${dynamicColor}" opacity="0.15"/>`;
+    }
+  }
+
+  // Teks nilai sudut
+  const midAngle = (line1Angle + line2Angle) / 2;
+  const labelDist = arcRadius + (radius > 200 ? 30 : 20);
+  const labelP = polarToCart(centerX, centerY, labelDist, midAngle);
+  
+  if (measuredAngle > 0) {
+    dynamicContent += `<text x="${labelP.x}" y="${labelP.y}" text-anchor="middle" dominant-baseline="middle" fill="${dynamicColor}" class="glow-line" style="font-size:${radius > 200 ? 18 : 14}px; font-family: 'JetBrains Mono', monospace; font-weight:900;">${measuredAngle}°</text>`;
+  }
+
+  // Garis pengukur
+  const lineLen = radius + 20; 
+  const l1End = polarToCart(centerX, centerY, lineLen, line1Angle);
+  const l2End = polarToCart(centerX, centerY, lineLen, line2Angle);
+
+  // Line 1 (Sisi 1) - Tetap memakai secondary color
+  dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l1End.x}" y2="${l1End.y}" stroke="${secondaryColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
+  // Line 2 (Sisi 2) - Mengikuti Dynamic Color
+  dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l2End.x}" y2="${l2End.y}" stroke="${dynamicColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
+
+  // Gagang Drag Line 1
+  const canDragLine1 = currentScenario.id === 'free';
+  const handle1Color = canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)';
+  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="12" fill="${handle1Color}" opacity="0.3" class="pulse-dot"/>`;
+  dynamicContent += `<circle id="handle1" cx="${l1End.x}" cy="${l1End.y}" r="16" fill="${handle1Color}" opacity="${canDragLine1 ? 0.8 : 0.3}" class="handle-hover" style="cursor:${canDragLine1 ? 'grab' : 'default'}" data-line="line1"/>`;
+  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="5" fill="var(--bg-color)" stroke="${handle1Color}" stroke-width="2"/>`;
+
+  // Gagang Drag Line 2 (Dynamic Color)
+  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="12" fill="${dynamicColor}" opacity="0.3" class="pulse-dot"/>`;
+  dynamicContent += `<circle id="handle2" cx="${l2End.x}" cy="${l2End.y}" r="16" fill="${dynamicColor}" opacity="0.8" class="handle-hover" style="cursor:grab" data-line="line2"/>`;
+  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="5" fill="var(--bg-color)" stroke="${dynamicColor}" stroke-width="2"/>`;
+
+  dynamicLayer.innerHTML = dynamicContent;
+
+  // Update Header Warna Text
+  document.getElementById('angle-value').textContent = `${measuredAngle}°`;
+  document.getElementById('angle-value').style.color = dynamicColor;
+  
+  updateCalcPanel(dynamicColor, basePrimaryColor);
+}
+
+function updateCalcPanel(dynamicColor, defaultPrimary) {
+  const a1 = line1Angle;
+  const a2 = line2Angle;
+  const measured = getMeasuredAngle();
+  const secondaryColor = (window.elementSdk?.config.secondary_action) || defaultConfig.secondary_action;
+  const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
+
+  let angleType = measured === 90 ? 'Siku-siku' : 
+                  measured > 0 && measured < 90 ? 'Lancip' : 
+                  measured > 90 && measured < 180 ? 'Tumpul' : 
+                  measured === 180 ? 'Garis Lurus' : 'Sudut Nol';
+
+  const htmlContentDesk = `
+    <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
+      <div class="text-xs opacity-60">Sisi 1</div>
+      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${secondaryColor};">${a1}°</div>
+    </div>
+    <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
+      <div class="text-xs opacity-60">Sisi 2</div>
+      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${dynamicColor};">${a2}°</div>
+    </div>
+    <div class="rounded-lg p-2 mt-1" style="background:rgba(255,255,255,0.05);">
+      <div class="text-[10px] opacity-60 mb-1">Total Sudut = | ${Math.max(a1,a2)}° - ${Math.min(a1,a2)}° |</div>
+      <div class="font-bold text-lg" style="color:${dynamicColor};">${measured}° <span class="text-xs font-normal opacity-70">(${angleType})</span></div>
+    </div>
+  `;
+
+  document.getElementById('calc-content').innerHTML = htmlContentDesk;
+  document.getElementById('mobile-calc-content').innerHTML = `
+    <div class="flex flex-col"><span class="text-xs opacity-50">Sisi 1</span> <span style="color:${secondaryColor}; font-weight:bold">${a1}°</span></div>
+    <div class="flex flex-col items-center"><span class="text-xs opacity-50">Tipe</span> <span style="color:${dynamicColor}; font-weight:bold">${angleType}</span></div>
+    <div class="flex flex-col text-right"><span class="text-xs opacity-50">Sisi 2</span> <span style="color:${dynamicColor}; font-weight:bold">${a2}°</span></div>
+  `;
+}
+
+// ─── SCENARIOS ─────────────────────────────────────────────
+function loadScenario(scenario) {
+  currentScenario = scenario;
+  line1Angle = scenario.line1Angle;
+  line2Angle = scenario.line2Angle;
+
+  document.getElementById('info-title').textContent = scenario.desc;
+  document.getElementById('info-desc').textContent = scenario.detail;
+
+  document.querySelectorAll('.scenario-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.id === scenario.id);
+  });
+
+  buildProtractor();
+}
+
+function buildScenarioButtons() {
+  const container = document.getElementById('scenario-buttons');
+
+  container.innerHTML = '';
+  scenarios.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'scenario-btn rounded-full px-4 py-2 text-sm font-bold flex items-center gap-2 backdrop-blur-md';
+    btn.style.cssText = `background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.1); color: var(--text-color);`;
+    btn.dataset.id = s.id;
+    btn.innerHTML = `<i data-lucide="${s.icon}" style="width:16px;height:16px;"></i><span>${s.name}</span>`;
+    btn.addEventListener('click', () => loadScenario(s));
+    container.appendChild(btn);
+  });
+}
+
+// ─── DRAG INTERACTION ──────────────────────────────────────
+function getAngleFromEvent(e) {
+  if (!svgRect) updateSvgDimensions(); 
+  
+  const viewBox = svgEl.viewBox.baseVal;
+  const scaleX = viewBox.width / svgRect.width;
+  const scaleY = viewBox.height / svgRect.height;
+
+  let clientX, clientY;
+  if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  const svgX = (clientX - svgRect.left) * scaleX;
+  const svgY = (clientY - svgRect.top) * scaleY;
+
+  const dx = svgX - centerX;
+  const dy = svgY - centerY;
+  
+  let angle = Math.atan2(-dy, dx) * 180 / Math.PI; 
+  if (angle < 0) angle += 360;
+
+  if (angle > 180) {
+    if (angle < 270) angle = 180; 
+    else angle = 0;               
+  }
+
+  return Math.round(angle);
+}
+
+function onPointerDown(e) {
+  const target = e.target;
+  if (!target.dataset || !target.dataset.line) return;
+
+  const lineName = target.dataset.line;
+  const canDragLine1 = currentScenario.id === 'free';
+  if (lineName === 'line1' && !canDragLine1) return;
+
+  dragging = lineName;
+  updateSvgDimensions(); 
+  e.preventDefault();
+}
+
+function onPointerMove(e) {
+  if (!dragging) return;
+  e.preventDefault();
+
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  animationFrameId = requestAnimationFrame(() => {
+    const angle = getAngleFromEvent(e);
+    if (dragging === 'line1') line1Angle = angle;
+    else line2Angle = angle;
+    buildProtractor(); 
+  });
+}
+
+function onPointerUp() { dragging = null; }
+
+svgEl.addEventListener('mousedown', onPointerDown);
+window.addEventListener('mousemove', onPointerMove); 
+window.addEventListener('mouseup', onPointerUp);
+svgEl.addEventListener('touchstart', onPointerDown, { passive: false });
+window.addEventListener('touchmove', onPointerMove, { passive: false });
+window.addEventListener('touchend', onPointerUp);
+
+// ─── ELEMENT SDK ───────────────────────────────────────────
+function applyConfig(config) {
+  const bg = config.background_color || defaultConfig.background_color;
+  const surface = config.surface_color || defaultConfig.surface_color;
+  const text = config.text_color || defaultConfig.text_color;
+  const primary = config.primary_action || defaultConfig.primary_action;
+  const secondary = config.secondary_action || defaultConfig.secondary_action;
+  const font = config.font_family || defaultConfig.font_family;
+
+  document.documentElement.style.setProperty('--bg-color', bg);
+  document.documentElement.style.setProperty('--surface-color', surface);
+  document.documentElement.style.setProperty('--text-color', text);
+  document.documentElement.style.setProperty('--primary-action', primary);
+  document.documentElement.style.setProperty('--secondary-action', secondary);
+
+  document.body.style.fontFamily = `${font}, Nunito, sans-serif`;
+  document.getElementById('app-title').style.fontFamily = `${font}, Nunito, sans-serif`;
+
+  buildProtractor(true);
+}
+
+if (window.elementSdk) {
+  window.elementSdk.init({
+    defaultConfig,
+    onConfigChange: async (config) => { applyConfig(config); }
+  });
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+function init() {
+  lucide.createIcons();
+  buildScenarioButtons();
+  setTimeout(() => { 
+      updateSvgDimensions();
+      loadScenario(scenarios[0]);
+  }, 50);
+}
+
+init();
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    buildProtractor(true);
+  }, 100);
+});
+  </script>
+</body>
+</html>
