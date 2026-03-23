@@ -19,7 +19,6 @@
 
     .glow-line { filter: drop-shadow(0 0 4px currentColor); }
     
-    /* Animasi cerdas: saat ditekan tombol +/- transisi aktif, saat digeser transisi mati */
     .smooth-transition { transition: stroke 0.15s ease, fill 0.15s ease, color 0.15s ease; }
     .anim-transform { transition: all 0.2s ease-out; }
     .no-anim { transition: none !important; }
@@ -30,9 +29,20 @@
       100% { r: 24; opacity: 0; }
     }
 
-    .scenario-btn { transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; }
-    .scenario-btn:hover { transform: translateY(-2px); }
-    .scenario-btn.active { box-shadow: 0 0 0 2px var(--primary-action), 0 4px 12px rgba(0,0,0,0.3); background: var(--primary-action) !important; color: var(--bg-color) !important; }
+    /* --- DESAIN TOMBOL BARU (SEGMENTED CONTROL) --- */
+    .scenario-btn { 
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+      opacity: 0.6; 
+      color: var(--text-color);
+    }
+    .scenario-btn:hover { opacity: 1; }
+    .scenario-btn.active { 
+      opacity: 1;
+      background: var(--primary-action) !important; 
+      color: #0f172a !important; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-color: transparent !important;
+    }
 
     .btn-precision { transition: background 0.1s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; }
     .btn-precision:active { transform: scale(0.9); }
@@ -69,8 +79,9 @@
     </div>
   </header>
 
-  <div class="w-full px-4 py-2 flex-shrink-0 z-10 border-b overflow-x-auto hide-scrollbar" style="background: var(--bg-color); border-color: rgba(255,255,255,0.05);">
-    <div id="scenario-buttons" class="flex gap-2 w-max mx-auto md:mx-0"></div>
+  <div class="w-full px-4 py-3 flex-shrink-0 z-10" style="background: var(--bg-color);">
+    <div id="scenario-buttons" class="grid grid-cols-2 gap-1 p-1 mx-auto w-full max-w-sm rounded-xl" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.05);">
+      </div>
   </div>
 
   <div class="flex-1 w-full relative min-h-[35vh]" style="background: radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 70%);">
@@ -129,9 +140,9 @@ let svgRect = null;
 let centerX = 0, centerY = 0, radius = 0;
 let isInitialized = false;
 let animationFrameId = null;
-let isAnimating = false; // Flag untuk transisi CSS
+let isAnimating = false; 
 
-// Cache DOM Elements (Agar sangat ringan saat ditarik)
+// Cache DOM Elements 
 const els = {};
 
 const svgEl = document.getElementById('protractor-svg');
@@ -169,12 +180,11 @@ function updateSvgDimensions() {
   radius = Math.min(maxWidth, maxHeight);
 }
 
-// ─── INITIALIZATION (HANYA JALAN 1X) ────────────────────────
+// ─── INITIALIZATION ────────────────────────
 function initDOM() {
   updateSvgDimensions();
   const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
 
-  // 1. BUAT LAYER STATIS
   let staticContent = '';
   staticContent += `<path d="M ${centerX + radius + 15} ${centerY} A ${radius + 15} ${radius + 15} 0 0 0 ${centerX - radius - 15} ${centerY} Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>`;
   staticContent += `<line x1="${centerX - radius - 20}" y1="${centerY}" x2="${centerX + radius + 20}" y2="${centerY}" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>`;
@@ -204,7 +214,6 @@ function initDOM() {
   }
   staticLayer.innerHTML = staticContent;
 
-  // 2. BUAT LAYER DINAMIS (KOSONG DULU, TAPI ADA ID-NYA)
   dynamicLayer.innerHTML = `
     <path id="arc-bg" class="angle-arc smooth-transition" stroke-width="3" opacity="0.15" />
     <path id="arc-main" class="angle-arc smooth-transition" stroke-width="3" opacity="0.6" />
@@ -224,7 +233,6 @@ function initDOM() {
     <circle id="h2-hitbox" class="hitbox" data-line="line2" r="50" />
   `;
 
-  // 3. CACHE DOM ELEMENTS KE MEMORY (Kunci Performa)
   ['arc-bg', 'arc-main', 'angle-text', 'line1', 'line2', 
    'h1-pulse', 'h1-vis', 'h1-center', 'h1-hitbox', 
    'h2-pulse', 'h2-vis', 'h2-center', 'h2-hitbox'].forEach(id => {
@@ -234,7 +242,7 @@ function initDOM() {
   isInitialized = true;
 }
 
-// ─── UPDATE ATTRIBUTES (SANGAT RINGAN) ─────────────────────
+// ─── UPDATE ATTRIBUTES ─────────────────────
 function updateProtractor() {
   if (!isInitialized) initDOM();
 
@@ -250,14 +258,12 @@ function updateProtractor() {
   let minA = Math.min(line1Angle, line2Angle);
   let maxA = Math.max(line1Angle, line2Angle);
 
-  // Toggle CSS Animation class agar tidak ngelag saat ditarik
   const movingEls = [els['line1'], els['line2'], els['h1-pulse'], els['h1-vis'], els['h1-center'], els['h2-pulse'], els['h2-vis'], els['h2-center']];
   movingEls.forEach(el => {
       if(isAnimating) el.classList.remove('no-anim');
       else el.classList.add('no-anim');
   });
 
-  // 1. Update Area Arsiran & Simbol
   if (measuredAngle > 0) {
     els['arc-bg'].style.display = 'block';
     els['arc-main'].style.display = 'block';
@@ -281,7 +287,6 @@ function updateProtractor() {
     els['arc-main'].setAttribute('stroke', dynamicColor);
     els['arc-bg'].setAttribute('fill', dynamicColor);
 
-    // Teks di tengah arc
     const midAngle = (line1Angle + line2Angle) / 2;
     const labelDist = arcRadius + (radius > 150 ? 25 : 18);
     const labelP = polarToCart(centerX, centerY, labelDist, midAngle);
@@ -295,7 +300,6 @@ function updateProtractor() {
     els['angle-text'].style.display = 'none';
   }
 
-  // 2. Update Garis (Menggunakan direct attributes sangat cepat)
   const lineLen = radius + 15; 
   const l1End = polarToCart(centerX, centerY, lineLen, line1Angle);
   const l2End = polarToCart(centerX, centerY, lineLen, line2Angle);
@@ -308,7 +312,6 @@ function updateProtractor() {
   els['line2'].setAttribute('y2', l2End.y);
   els['line2'].setAttribute('stroke', dynamicColor);
 
-  // 3. Update Gagang 1
   ['h1-pulse', 'h1-vis', 'h1-center', 'h1-hitbox'].forEach(id => {
     els[id].setAttribute('cx', l1End.x);
     els[id].setAttribute('cy', l1End.y);
@@ -320,7 +323,6 @@ function updateProtractor() {
   els['h1-center'].setAttribute('stroke-width', '2.5');
   els['h1-hitbox'].style.pointerEvents = canDragLine1 ? "all" : "none";
 
-  // 4. Update Gagang 2
   ['h2-pulse', 'h2-vis', 'h2-center', 'h2-hitbox'].forEach(id => {
     els[id].setAttribute('cx', l2End.x);
     els[id].setAttribute('cy', l2End.y);
@@ -329,16 +331,14 @@ function updateProtractor() {
   els['h2-vis'].setAttribute('fill', dynamicColor);
   els['h2-center'].setAttribute('stroke', dynamicColor);
 
-  // Update UI Teks Bawah
   document.getElementById('angle-value').textContent = `${measuredAngle}°`;
   document.getElementById('angle-value').style.color = dynamicColor;
   updateCalcPanels(dynamicColor);
 }
 
-// ─── KONTROL PRESISI MANUAL ────────────────────────────────
 window.changeAngle = function(line, amount) {
   if(line === 'line1' && currentScenario.id !== 'free') return;
-  isAnimating = true; // Nyalakan animasi agar halus saat ditekan tombol
+  isAnimating = true; 
   
   if(line === 'line1') line1Angle = Math.max(0, Math.min(180, line1Angle + amount));
   else line2Angle = Math.max(0, Math.min(180, line2Angle + amount));
@@ -357,7 +357,6 @@ function updateCalcPanels(dynamicColor) {
 
   const canDragLine1 = currentScenario.id === 'free';
 
-  // Desktop Card
   document.getElementById('desktop-calc-content').innerHTML = `
     <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
       <div class="text-xs opacity-60">Sisi 1</div>
@@ -373,7 +372,6 @@ function updateCalcPanels(dynamicColor) {
     </div>
   `;
 
-  // Mobile Bottom Sheet
   document.getElementById('mobile-calc-content').innerHTML = `
     <div class="flex flex-col items-center gap-1 w-1/3">
       <span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 1</span> 
@@ -402,7 +400,7 @@ function updateCalcPanels(dynamicColor) {
 
 // ─── SCENARIOS ─────────────────────────────────────────────
 function loadScenario(scenario) {
-  isAnimating = true; // Nyalakan animasi saat ganti mode
+  isAnimating = true; 
   currentScenario = scenario;
   line1Angle = scenario.line1Angle;
   line2Angle = scenario.line2Angle;
@@ -410,6 +408,7 @@ function loadScenario(scenario) {
   document.getElementById('info-title').textContent = scenario.name;
   document.getElementById('info-desc').textContent = scenario.detail;
 
+  // Update status tombol Segmented Control
   document.querySelectorAll('.scenario-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.id === scenario.id);
   });
@@ -417,15 +416,16 @@ function loadScenario(scenario) {
   updateProtractor();
 }
 
+// FUNGSI RENDER TOMBOL DENGAN GRID AGAR SIMETRIS
 function buildScenarioButtons() {
   const container = document.getElementById('scenario-buttons');
   container.innerHTML = '';
   scenarios.forEach(s => {
     const btn = document.createElement('button');
-    btn.className = 'scenario-btn rounded-full px-4 py-2 text-xs md:text-sm font-bold flex items-center gap-2 backdrop-blur-md';
-    btn.style.cssText = `background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.1); color: var(--text-color);`;
+    // Kelas 'w-full' dipadukan dengan 'grid-cols-2' di wadahnya menjamin lebar sempurna 50%
+    btn.className = 'scenario-btn w-full rounded-lg py-2 text-xs md:text-sm font-bold flex items-center justify-center gap-1.5';
     btn.dataset.id = s.id;
-    btn.innerHTML = `<i data-lucide="${s.icon}" style="width:14px;height:14px;"></i><span>${s.name}</span>`;
+    btn.innerHTML = `<i data-lucide="${s.icon}" style="width:16px;height:16px;"></i><span>${s.name}</span>`;
     btn.addEventListener('click', () => loadScenario(s));
     container.appendChild(btn);
   });
@@ -461,7 +461,6 @@ function getAngleFromEvent(e) {
   
   let roundedAngle = Math.round(angle);
 
-  // Efek magnet kelipatan 5 derajat
   if (Math.abs(roundedAngle % 5) <= 1 || Math.abs(roundedAngle % 5) >= 4) {
     roundedAngle = Math.round(roundedAngle / 5) * 5;
   }
@@ -477,7 +476,7 @@ function onPointerDown(e) {
   const canDragLine1 = currentScenario.id === 'free';
   if (lineName === 'line1' && !canDragLine1) return;
 
-  isAnimating = false; // Matikan animasi agar instan mengikuti jari
+  isAnimating = false; 
   dragging = lineName;
   updateSvgDimensions(); 
   e.preventDefault(); 
@@ -488,10 +487,8 @@ function onPointerMove(e) {
   e.preventDefault();
 
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
-  // Gunakan requestAnimationFrame untuk sync layar HP (60hz / 120hz)
   animationFrameId = requestAnimationFrame(() => {
     const angle = getAngleFromEvent(e);
-    // Hentikan proses jika sudut tidak berubah (Menghemat CPU!)
     if (dragging === 'line1' && line1Angle !== angle) {
         line1Angle = angle;
         updateProtractor(); 
@@ -528,7 +525,7 @@ function applyConfig(config) {
   document.documentElement.style.setProperty('--secondary-action', secondary);
   document.body.style.fontFamily = `${font}, Nunito, sans-serif`;
 
-  isInitialized = false; // Paksa render ulang layer statis
+  isInitialized = false; 
   updateProtractor();
 }
 
@@ -553,7 +550,7 @@ let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    isInitialized = false; // Rebuild layer statis jika HP diputar
+    isInitialized = false; 
     updateProtractor();
   }, 100);
 });
