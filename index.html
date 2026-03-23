@@ -10,32 +10,36 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; overscroll-behavior-y: none; }
+    html, body { height: 100%; overflow: hidden; overscroll-behavior-y: none; touch-action: none; }
     body { font-family: 'Nunito', sans-serif; }
 
-    /* Mencegah layar ikut terscroll saat menyentuh SVG di HP */
     #protractor-svg { touch-action: none; }
 
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
     .glow-line { filter: drop-shadow(0 0 4px currentColor); }
-    .angle-arc { fill: none; stroke-linecap: round; transition: stroke 0.2s ease, fill 0.2s ease; }
-    .pulse-dot { animation: pulse-ring 2s ease-out infinite; }
-
+    .angle-arc { fill: none; stroke-linecap: round; transition: stroke 0.1s ease, fill 0.1s ease; }
+    
+    /* Animasi denyut pada gagang */
+    .pulse-dot { animation: pulse-ring 2s ease-out infinite; pointer-events: none; }
     @keyframes pulse-ring {
       0% { r: 6; opacity: 0.8; }
-      100% { r: 20; opacity: 0; }
+      100% { r: 24; opacity: 0; }
     }
-
-    .handle-hover:hover { cursor: grab; transform: scale(1.2); transition: transform 0.15s ease; }
-    .handle-hover:active { cursor: grabbing; }
 
     .scenario-btn { transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; }
     .scenario-btn:hover { transform: translateY(-2px); }
     .scenario-btn.active { box-shadow: 0 0 0 2px var(--primary-action), 0 4px 12px rgba(0,0,0,0.3); background: var(--primary-action) !important; color: var(--bg-color) !important; }
 
-    circle, line, path, text { transition: stroke 0.15s ease, fill 0.15s ease, color 0.15s ease; }
+    .btn-precision { transition: background 0.1s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; }
+    .btn-precision:active { transform: scale(0.9); }
+
+    circle, line, path, text { transition: stroke 0.1s ease, fill 0.1s ease, color 0.1s ease; }
+    
+    /* --- INVISIBLE HITBOX CSS --- */
+    .hitbox { cursor: grab; fill: transparent; pointer-events: all; }
+    .hitbox:active { cursor: grabbing; }
 
     :root {
       --bg-color: #0f172a;
@@ -70,7 +74,7 @@
     <div id="scenario-buttons" class="flex gap-2 w-max mx-auto md:mx-0"></div>
   </div>
 
-  <div class="flex-1 w-full relative min-h-[40vh]" style="background: radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 70%);">
+  <div class="flex-1 w-full relative min-h-[35vh]" style="background: radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 70%);">
     <div id="desktop-calc-panel" class="absolute top-4 right-4 z-10 hidden md:block w-64 pointer-events-auto">
       <div class="rounded-xl p-4 shadow-xl backdrop-blur-md" style="background: rgba(30,41,59,0.85); border: 1px solid rgba(255,255,255,0.08);">
         <div class="flex items-center gap-2 mb-3">
@@ -88,7 +92,7 @@
   </div>
 
   <div class="w-full flex-shrink-0 z-20 rounded-t-3xl p-4 md:p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.15)]" style="background: var(--surface-color); border-top: 1px solid rgba(255,255,255,0.08);">
-    <div class="mb-4 text-center md:text-left">
+    <div class="mb-3 text-center md:text-left">
       <div class="flex items-center justify-center md:justify-start gap-1.5 mb-1">
         <i data-lucide="info" style="width:14px;height:14px;color:var(--primary-action);"></i>
         <h3 id="info-title" class="text-sm font-bold" style="color: var(--primary-action);"></h3>
@@ -96,8 +100,8 @@
       <p id="info-desc" class="text-xs opacity-70 leading-relaxed"></p>
     </div>
 
-    <div class="p-3 rounded-2xl flex justify-between items-center text-sm w-full" style="background: rgba(0,0,0,0.2);">
-      <div id="mobile-calc-content" class="w-full flex justify-between items-center px-2"></div>
+    <div class="p-3 rounded-2xl flex flex-col gap-2 text-sm w-full" style="background: rgba(0,0,0,0.2);">
+      <div id="mobile-calc-content" class="w-full flex justify-between items-center px-1"></div>
     </div>
   </div>
 
@@ -105,7 +109,6 @@
 // ─── CONFIG & STATE ────────────────────────────────────────
 const defaultConfig = {
   app_title: 'Simulasi Busur Derajat',
-  instruction_text: 'Seret garis ukur (0°-180°)',
   background_color: '#0f172a',
   surface_color: '#1e293b',
   text_color: '#e2e8f0',
@@ -156,12 +159,10 @@ function updateSvgDimensions() {
   svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
   
   centerX = w / 2;
-  // Di mode mobile (portrait), titik tengah diturunkan agar busur maksimal
-  centerY = h - Math.max(30, h * 0.1); 
+  centerY = h - Math.max(20, h * 0.1); 
   
-  // Padding kiri-kanan lebih tipis (15px) agar busur besar di HP
-  const maxWidth = (w - 30) / 2; 
-  const maxHeight = centerY - 20; 
+  const maxWidth = (w - 20) / 2; 
+  const maxHeight = centerY - 15; 
   radius = Math.min(maxWidth, maxHeight);
 }
 
@@ -176,7 +177,6 @@ function buildProtractor(forceRebuildStatic = false) {
   const measuredAngle = getMeasuredAngle();
   const dynamicColor = getDynamicColor(measuredAngle, basePrimaryColor);
 
-  // LAYER STATIS
   if (!isStaticLayerBuilt || forceRebuildStatic) {
     let staticContent = '';
     
@@ -211,7 +211,6 @@ function buildProtractor(forceRebuildStatic = false) {
     isStaticLayerBuilt = true;
   }
 
-  // LAYER DINAMIS
   let dynamicContent = '';
   const arcRadius = radius * 0.35;
   let minA = Math.min(line1Angle, line2Angle);
@@ -249,16 +248,22 @@ function buildProtractor(forceRebuildStatic = false) {
   dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l1End.x}" y2="${l1End.y}" stroke="${secondaryColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
   dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l2End.x}" y2="${l2End.y}" stroke="${dynamicColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
 
-  // Gagang Diperbesar sedikit (r=18 untuk mempermudah jari menyentuh di HP)
   const canDragLine1 = currentScenario.id === 'free';
   const handle1Color = canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)';
+  
+  // --- VISUAL & HITBOX LINE 1 ---
   dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="12" fill="${handle1Color}" opacity="0.3" class="pulse-dot"/>`;
-  dynamicContent += `<circle id="handle1" cx="${l1End.x}" cy="${l1End.y}" r="18" fill="${handle1Color}" opacity="${canDragLine1 ? 0.8 : 0.3}" class="handle-hover" style="cursor:${canDragLine1 ? 'grab' : 'default'}" data-line="line1"/>`;
-  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="6" fill="var(--bg-color)" stroke="${handle1Color}" stroke-width="2.5"/>`;
+  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="10" fill="${handle1Color}" opacity="${canDragLine1 ? 0.9 : 0.3}"/>`;
+  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="4" fill="var(--bg-color)"/>`;
+  // Hitbox Ekstra Besar (r=50) diletakkan di layer paling atas
+  dynamicContent += `<circle class="hitbox" cx="${l1End.x}" cy="${l1End.y}" r="50" data-line="line1" style="${canDragLine1 ? '' : 'pointer-events:none;'}"/>`;
 
+  // --- VISUAL & HITBOX LINE 2 ---
   dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="12" fill="${dynamicColor}" opacity="0.3" class="pulse-dot"/>`;
-  dynamicContent += `<circle id="handle2" cx="${l2End.x}" cy="${l2End.y}" r="18" fill="${dynamicColor}" opacity="0.8" class="handle-hover" style="cursor:grab" data-line="line2"/>`;
-  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="6" fill="var(--bg-color)" stroke="${dynamicColor}" stroke-width="2.5"/>`;
+  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="10" fill="${dynamicColor}" opacity="0.9"/>`;
+  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="4" fill="var(--bg-color)"/>`;
+  // Hitbox Ekstra Besar (r=50) diletakkan di layer paling atas
+  dynamicContent += `<circle class="hitbox" cx="${l2End.x}" cy="${l2End.y}" r="50" data-line="line2"/>`;
 
   dynamicLayer.innerHTML = dynamicContent;
 
@@ -266,6 +271,18 @@ function buildProtractor(forceRebuildStatic = false) {
   document.getElementById('angle-value').style.color = dynamicColor;
   
   updateCalcPanels(dynamicColor);
+}
+
+// Kontrol Presisi Manual
+window.changeAngle = function(line, amount) {
+  if(line === 'line1' && currentScenario.id !== 'free') return;
+  
+  if(line === 'line1') {
+    line1Angle = Math.max(0, Math.min(180, line1Angle + amount));
+  } else {
+    line2Angle = Math.max(0, Math.min(180, line2Angle + amount));
+  }
+  buildProtractor();
 }
 
 function updateCalcPanels(dynamicColor) {
@@ -280,7 +297,8 @@ function updateCalcPanels(dynamicColor) {
                   measured > 90 && measured < 180 ? 'Tumpul' : 
                   measured === 180 ? 'Garis Lurus' : 'Sudut Nol';
 
-  // Desktop Card
+  const canDragLine1 = currentScenario.id === 'free';
+
   document.getElementById('desktop-calc-content').innerHTML = `
     <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
       <div class="text-xs opacity-60">Sisi 1</div>
@@ -291,19 +309,34 @@ function updateCalcPanels(dynamicColor) {
       <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${dynamicColor};">${a2}°</div>
     </div>
     <div class="rounded-lg p-2 mt-1" style="background:rgba(255,255,255,0.05);">
-      <div class="text-[10px] opacity-60 mb-1">Total Sudut = | ${Math.max(a1,a2)}° - ${Math.min(a1,a2)}° |</div>
+      <div class="text-[10px] opacity-60 mb-1">Total Sudut</div>
       <div class="font-bold text-lg" style="color:${dynamicColor};">${measured}° <span class="text-xs font-normal opacity-70">(${angleType})</span></div>
     </div>
   `;
 
-  // Mobile Bottom Sheet Content
   document.getElementById('mobile-calc-content').innerHTML = `
-    <div class="flex flex-col"><span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 1</span> <span class="text-lg" style="color:${secondaryColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a1}°</span></div>
-    <div class="flex flex-col items-center">
-      <span class="text-[10px] opacity-50 uppercase tracking-wider">Tipe Sudut</span> 
-      <div class="px-3 py-1 mt-1 rounded-full text-xs font-bold" style="background: ${dynamicColor}20; color:${dynamicColor};">${angleType}</div>
+    <div class="flex flex-col items-center gap-1 w-1/3">
+      <span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 1</span> 
+      <div class="flex items-center gap-2">
+        <button onclick="changeAngle('line1', -1)" class="btn-precision" style="background: ${canDragLine1 ? secondaryColor+'30' : 'rgba(255,255,255,0.05)'}; color: ${canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)'};" ${!canDragLine1 ? 'disabled' : ''}>-</button>
+        <span class="text-lg w-8 text-center" style="color:${secondaryColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a1}°</span>
+        <button onclick="changeAngle('line1', 1)" class="btn-precision" style="background: ${canDragLine1 ? secondaryColor+'30' : 'rgba(255,255,255,0.05)'}; color: ${canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)'};" ${!canDragLine1 ? 'disabled' : ''}>+</button>
+      </div>
     </div>
-    <div class="flex flex-col text-right"><span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 2</span> <span class="text-lg" style="color:${dynamicColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a2}°</span></div>
+
+    <div class="flex flex-col items-center justify-center w-1/3">
+      <span class="text-[10px] opacity-50 uppercase tracking-wider">Tipe Sudut</span> 
+      <div class="px-2 py-1 mt-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap" style="background: ${dynamicColor}20; color:${dynamicColor}; border: 1px solid ${dynamicColor}40;">${angleType}</div>
+    </div>
+
+    <div class="flex flex-col items-center gap-1 w-1/3">
+      <span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 2</span> 
+      <div class="flex items-center gap-2">
+        <button onclick="changeAngle('line2', -1)" class="btn-precision" style="background: ${dynamicColor}30; color: ${dynamicColor};">-</button>
+        <span class="text-lg w-8 text-center" style="color:${dynamicColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a2}°</span>
+        <button onclick="changeAngle('line2', 1)" class="btn-precision" style="background: ${dynamicColor}30; color: ${dynamicColor};">+</button>
+      </div>
+    </div>
   `;
 }
 
@@ -313,11 +346,9 @@ function loadScenario(scenario) {
   line1Angle = scenario.line1Angle;
   line2Angle = scenario.line2Angle;
 
-  // Update text
   document.getElementById('info-title').textContent = scenario.name;
   document.getElementById('info-desc').textContent = scenario.detail;
 
-  // Active state buttons
   document.querySelectorAll('.scenario-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.id === scenario.id);
   });
@@ -342,7 +373,6 @@ function buildScenarioButtons() {
 // ─── DRAG INTERACTION ──────────────────────────────────────
 function getAngleFromEvent(e) {
   if (!svgRect) updateSvgDimensions(); 
-  
   const viewBox = svgEl.viewBox.baseVal;
   const scaleX = viewBox.width / svgRect.width;
   const scaleY = viewBox.height / svgRect.height;
@@ -358,7 +388,6 @@ function getAngleFromEvent(e) {
 
   const svgX = (clientX - svgRect.left) * scaleX;
   const svgY = (clientY - svgRect.top) * scaleY;
-
   const dx = svgX - centerX;
   const dy = svgY - centerY;
   
@@ -369,7 +398,15 @@ function getAngleFromEvent(e) {
     if (angle < 270) angle = 180; 
     else angle = 0;               
   }
-  return Math.round(angle);
+  
+  let roundedAngle = Math.round(angle);
+
+  // EFEK MAGNET KELIPATAN 5°
+  if (Math.abs(roundedAngle % 5) <= 1 || Math.abs(roundedAngle % 5) >= 4) {
+    roundedAngle = Math.round(roundedAngle / 5) * 5;
+  }
+
+  return roundedAngle;
 }
 
 function onPointerDown(e) {
@@ -382,7 +419,7 @@ function onPointerDown(e) {
 
   dragging = lineName;
   updateSvgDimensions(); 
-  e.preventDefault(); // Mencegah scroll default saat mulai touch
+  e.preventDefault(); 
 }
 
 function onPointerMove(e) {
@@ -404,7 +441,6 @@ svgEl.addEventListener('mousedown', onPointerDown);
 window.addEventListener('mousemove', onPointerMove); 
 window.addEventListener('mouseup', onPointerUp);
 
-// Event Touch khusus untuk HP
 svgEl.addEventListener('touchstart', onPointerDown, { passive: false });
 window.addEventListener('touchmove', onPointerMove, { passive: false });
 window.addEventListener('touchend', onPointerUp);
@@ -437,7 +473,6 @@ if (window.elementSdk) {
   });
 }
 
-// ─── INIT ──────────────────────────────────────────────────
 function init() {
   lucide.createIcons();
   buildScenarioButtons();
