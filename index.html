@@ -14,14 +14,16 @@
     body { font-family: 'Nunito', sans-serif; }
 
     #protractor-svg { touch-action: none; }
-
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
     .glow-line { filter: drop-shadow(0 0 4px currentColor); }
-    .angle-arc { fill: none; stroke-linecap: round; transition: stroke 0.1s ease, fill 0.1s ease; }
     
-    /* Animasi denyut pada gagang */
+    /* Animasi cerdas: saat ditekan tombol +/- transisi aktif, saat digeser transisi mati */
+    .smooth-transition { transition: stroke 0.15s ease, fill 0.15s ease, color 0.15s ease; }
+    .anim-transform { transition: all 0.2s ease-out; }
+    .no-anim { transition: none !important; }
+
     .pulse-dot { animation: pulse-ring 2s ease-out infinite; pointer-events: none; }
     @keyframes pulse-ring {
       0% { r: 6; opacity: 0.8; }
@@ -34,10 +36,7 @@
 
     .btn-precision { transition: background 0.1s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; }
     .btn-precision:active { transform: scale(0.9); }
-
-    circle, line, path, text { transition: stroke 0.1s ease, fill 0.1s ease, color 0.1s ease; }
     
-    /* --- INVISIBLE HITBOX CSS --- */
     .hitbox { cursor: grab; fill: transparent; pointer-events: all; }
     .hitbox:active { cursor: grabbing; }
 
@@ -65,8 +64,8 @@
         <p class="text-[10px] font-semibold tracking-wider" style="color: var(--secondary-action);">By Mathnology</p>
       </div>
     </div>
-    <div id="angle-display" class="rounded-xl px-3 py-1.5 text-center flex-shrink-0" style="background: rgba(0,0,0,0.2);">
-      <div id="angle-value" class="text-xl md:text-2xl font-black" style="font-family: 'JetBrains Mono', monospace; color: var(--primary-action);">0°</div>
+    <div id="angle-display" class="rounded-xl px-3 py-1.5 text-center flex-shrink-0 smooth-transition" style="background: rgba(0,0,0,0.2);">
+      <div id="angle-value" class="text-xl md:text-2xl font-black smooth-transition" style="font-family: 'JetBrains Mono', monospace; color: var(--primary-action);">0°</div>
     </div>
   </header>
 
@@ -128,8 +127,12 @@ let line2Angle = 60;
 let dragging = null; 
 let svgRect = null;
 let centerX = 0, centerY = 0, radius = 0;
-let isStaticLayerBuilt = false;
+let isInitialized = false;
 let animationFrameId = null;
+let isAnimating = false; // Flag untuk transisi CSS
+
+// Cache DOM Elements (Agar sangat ringan saat ditarik)
+const els = {};
 
 const svgEl = document.getElementById('protractor-svg');
 const staticLayer = document.getElementById('static-layer');
@@ -166,132 +169,187 @@ function updateSvgDimensions() {
   radius = Math.min(maxWidth, maxHeight);
 }
 
-// ─── SVG DRAWING ───────────────────────────────────────────
-function buildProtractor(forceRebuildStatic = false) {
-  if (!svgRect || forceRebuildStatic) updateSvgDimensions();
+// ─── INITIALIZATION (HANYA JALAN 1X) ────────────────────────
+function initDOM() {
+  updateSvgDimensions();
+  const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
+
+  // 1. BUAT LAYER STATIS
+  let staticContent = '';
+  staticContent += `<path d="M ${centerX + radius + 15} ${centerY} A ${radius + 15} ${radius + 15} 0 0 0 ${centerX - radius - 15} ${centerY} Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>`;
+  staticContent += `<line x1="${centerX - radius - 20}" y1="${centerY}" x2="${centerX + radius + 20}" y2="${centerY}" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>`;
+  staticContent += `<circle cx="${centerX}" cy="${centerY}" r="5" fill="none" stroke="${textColor}" stroke-width="1.5" opacity="0.6"/>`;
+  staticContent += `<line x1="${centerX}" y1="${centerY - 8}" x2="${centerX}" y2="${centerY + 8}" stroke="${textColor}" stroke-width="1" opacity="0.6"/>`;
+
+  for (let deg = 0; deg <= 180; deg += 1) {
+    const isMajor = deg % 10 === 0;
+    const isMid = deg % 5 === 0;
+    if (!isMajor && !isMid && deg % 1 !== 0) continue;
+
+    let tickLen = isMajor ? (radius > 150 ? 16 : 12) : isMid ? 8 : 4;
+    const outerP = polarToCart(centerX, centerY, radius, deg);
+    const innerP = polarToCart(centerX, centerY, radius - tickLen, deg);
+    const opacity = isMajor ? 0.8 : isMid ? 0.4 : 0.2;
+
+    staticContent += `<line x1="${outerP.x}" y1="${outerP.y}" x2="${innerP.x}" y2="${innerP.y}" stroke="${textColor}" stroke-width="${isMajor ? 1.5 : 0.8}" opacity="${opacity}"/>`;
+
+    if (isMajor) {
+      const labelP1 = polarToCart(centerX, centerY, radius - (radius > 150 ? 28 : 22), deg);
+      staticContent += `<text x="${labelP1.x}" y="${labelP1.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.9" style="font-size:${radius > 200 ? 12 : 9}px; font-family: 'JetBrains Mono', monospace; font-weight:700;">${deg}</text>`;
+      if(radius > 120) {
+          const labelP2 = polarToCart(centerX, centerY, radius - (radius > 150 ? 46 : 38), deg);
+          staticContent += `<text x="${labelP2.x}" y="${labelP2.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.3" style="font-size:${radius > 200 ? 10 : 7}px; font-family: 'JetBrains Mono', monospace; font-weight:600;">${180 - deg}</text>`;
+      }
+    }
+  }
+  staticLayer.innerHTML = staticContent;
+
+  // 2. BUAT LAYER DINAMIS (KOSONG DULU, TAPI ADA ID-NYA)
+  dynamicLayer.innerHTML = `
+    <path id="arc-bg" class="angle-arc smooth-transition" stroke-width="3" opacity="0.15" />
+    <path id="arc-main" class="angle-arc smooth-transition" stroke-width="3" opacity="0.6" />
+    <text id="angle-text" text-anchor="middle" dominant-baseline="middle" class="glow-line smooth-transition" style="font-size:${radius > 150 ? 16 : 12}px; font-family: 'JetBrains Mono', monospace; font-weight:900;"></text>
+
+    <line id="line1" x1="${centerX}" y1="${centerY}" stroke-width="3" class="glow-line anim-transform" stroke-linecap="round" opacity="0.9"/>
+    <line id="line2" x1="${centerX}" y1="${centerY}" stroke-width="3" class="glow-line smooth-transition anim-transform" stroke-linecap="round" opacity="0.9"/>
+
+    <circle id="h1-pulse" class="pulse-dot anim-transform" r="12" opacity="0.3" />
+    <circle id="h1-vis" class="anim-transform" r="10" opacity="0.9" />
+    <circle id="h1-center" class="anim-transform" r="4" fill="var(--bg-color)" />
+    <circle id="h1-hitbox" class="hitbox" data-line="line1" r="50" />
+
+    <circle id="h2-pulse" class="pulse-dot smooth-transition anim-transform" r="12" opacity="0.3" />
+    <circle id="h2-vis" class="smooth-transition anim-transform" r="10" opacity="0.9" />
+    <circle id="h2-center" class="smooth-transition anim-transform" r="4" fill="var(--bg-color)" stroke-width="2.5" />
+    <circle id="h2-hitbox" class="hitbox" data-line="line2" r="50" />
+  `;
+
+  // 3. CACHE DOM ELEMENTS KE MEMORY (Kunci Performa)
+  ['arc-bg', 'arc-main', 'angle-text', 'line1', 'line2', 
+   'h1-pulse', 'h1-vis', 'h1-center', 'h1-hitbox', 
+   'h2-pulse', 'h2-vis', 'h2-center', 'h2-hitbox'].forEach(id => {
+    els[id] = document.getElementById(id);
+  });
+
+  isInitialized = true;
+}
+
+// ─── UPDATE ATTRIBUTES (SANGAT RINGAN) ─────────────────────
+function updateProtractor() {
+  if (!isInitialized) initDOM();
 
   const basePrimaryColor = (window.elementSdk?.config.primary_action) || defaultConfig.primary_action;
   const secondaryColor = (window.elementSdk?.config.secondary_action) || defaultConfig.secondary_action;
-  const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
-
+  
   const measuredAngle = getMeasuredAngle();
   const dynamicColor = getDynamicColor(measuredAngle, basePrimaryColor);
+  const canDragLine1 = currentScenario.id === 'free';
+  const handle1Color = canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)';
 
-  if (!isStaticLayerBuilt || forceRebuildStatic) {
-    let staticContent = '';
-    
-    staticContent += `<path d="M ${centerX + radius + 15} ${centerY} A ${radius + 15} ${radius + 15} 0 0 0 ${centerX - radius - 15} ${centerY} Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>`;
-    staticContent += `<line x1="${centerX - radius - 20}" y1="${centerY}" x2="${centerX + radius + 20}" y2="${centerY}" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>`;
-    staticContent += `<circle cx="${centerX}" cy="${centerY}" r="5" fill="none" stroke="${textColor}" stroke-width="1.5" opacity="0.6"/>`;
-    staticContent += `<line x1="${centerX}" y1="${centerY - 8}" x2="${centerX}" y2="${centerY + 8}" stroke="${textColor}" stroke-width="1" opacity="0.6"/>`;
-
-    for (let deg = 0; deg <= 180; deg += 1) {
-      const isMajor = deg % 10 === 0;
-      const isMid = deg % 5 === 0;
-      if (!isMajor && !isMid && deg % 1 !== 0) continue;
-
-      let tickLen = isMajor ? (radius > 150 ? 16 : 12) : isMid ? 8 : 4;
-      const outerP = polarToCart(centerX, centerY, radius, deg);
-      const innerP = polarToCart(centerX, centerY, radius - tickLen, deg);
-      const opacity = isMajor ? 0.8 : isMid ? 0.4 : 0.2;
-
-      staticContent += `<line x1="${outerP.x}" y1="${outerP.y}" x2="${innerP.x}" y2="${innerP.y}" stroke="${textColor}" stroke-width="${isMajor ? 1.5 : 0.8}" opacity="${opacity}"/>`;
-
-      if (isMajor) {
-        const labelP1 = polarToCart(centerX, centerY, radius - (radius > 150 ? 28 : 22), deg);
-        staticContent += `<text x="${labelP1.x}" y="${labelP1.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.9" style="font-size:${radius > 200 ? 12 : 9}px; font-family: 'JetBrains Mono', monospace; font-weight:700;">${deg}</text>`;
-        
-        if(radius > 120) {
-            const labelP2 = polarToCart(centerX, centerY, radius - (radius > 150 ? 46 : 38), deg);
-            staticContent += `<text x="${labelP2.x}" y="${labelP2.y}" text-anchor="middle" dominant-baseline="middle" class="tick-text" fill="${textColor}" opacity="0.3" style="font-size:${radius > 200 ? 10 : 7}px; font-family: 'JetBrains Mono', monospace; font-weight:600;">${180 - deg}</text>`;
-        }
-      }
-    }
-    staticLayer.innerHTML = staticContent;
-    isStaticLayerBuilt = true;
-  }
-
-  let dynamicContent = '';
   const arcRadius = radius * 0.35;
   let minA = Math.min(line1Angle, line2Angle);
   let maxA = Math.max(line1Angle, line2Angle);
 
+  // Toggle CSS Animation class agar tidak ngelag saat ditarik
+  const movingEls = [els['line1'], els['line2'], els['h1-pulse'], els['h1-vis'], els['h1-center'], els['h2-pulse'], els['h2-vis'], els['h2-center']];
+  movingEls.forEach(el => {
+      if(isAnimating) el.classList.remove('no-anim');
+      else el.classList.add('no-anim');
+  });
+
+  // 1. Update Area Arsiran & Simbol
   if (measuredAngle > 0) {
+    els['arc-bg'].style.display = 'block';
+    els['arc-main'].style.display = 'block';
+    els['angle-text'].style.display = 'block';
+
     if (measuredAngle === 90) {
       const sqLen = arcRadius * 0.6;
       const p1 = polarToCart(centerX, centerY, sqLen, minA);
       const p2 = polarToCart(centerX, centerY, sqLen, maxA);
       const pMid = polarToCart(centerX, centerY, sqLen * 1.414, minA + 45); 
       
-      dynamicContent += `<path d="M ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y}" class="angle-arc" stroke="${dynamicColor}" stroke-width="3" opacity="0.9"/>`;
-      dynamicContent += `<path d="M ${centerX} ${centerY} L ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y} Z" fill="${dynamicColor}" opacity="0.25"/>`;
+      els['arc-main'].setAttribute('d', `M ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y}`);
+      els['arc-bg'].setAttribute('d', `M ${centerX} ${centerY} L ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y} Z`);
     } else {
       const start = polarToCart(centerX, centerY, arcRadius, minA);
       const end = polarToCart(centerX, centerY, arcRadius, maxA);
-      dynamicContent += `<path d="M ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y}" class="angle-arc" stroke="${dynamicColor}" stroke-width="3" opacity="0.6"/>`;
-      dynamicContent += `<path d="M ${centerX} ${centerY} L ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y} Z" fill="${dynamicColor}" opacity="0.15"/>`;
+      els['arc-main'].setAttribute('d', `M ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y}`);
+      els['arc-bg'].setAttribute('d', `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y} Z`);
     }
+
+    els['arc-main'].setAttribute('stroke', dynamicColor);
+    els['arc-bg'].setAttribute('fill', dynamicColor);
+
+    // Teks di tengah arc
+    const midAngle = (line1Angle + line2Angle) / 2;
+    const labelDist = arcRadius + (radius > 150 ? 25 : 18);
+    const labelP = polarToCart(centerX, centerY, labelDist, midAngle);
+    els['angle-text'].setAttribute('x', labelP.x);
+    els['angle-text'].setAttribute('y', labelP.y);
+    els['angle-text'].setAttribute('fill', dynamicColor);
+    els['angle-text'].textContent = `${measuredAngle}°`;
+  } else {
+    els['arc-bg'].style.display = 'none';
+    els['arc-main'].style.display = 'none';
+    els['angle-text'].style.display = 'none';
   }
 
-  const midAngle = (line1Angle + line2Angle) / 2;
-  const labelDist = arcRadius + (radius > 150 ? 25 : 18);
-  const labelP = polarToCart(centerX, centerY, labelDist, midAngle);
-  
-  if (measuredAngle > 0) {
-    dynamicContent += `<text x="${labelP.x}" y="${labelP.y}" text-anchor="middle" dominant-baseline="middle" fill="${dynamicColor}" class="glow-line" style="font-size:${radius > 150 ? 16 : 12}px; font-family: 'JetBrains Mono', monospace; font-weight:900;">${measuredAngle}°</text>`;
-  }
-
+  // 2. Update Garis (Menggunakan direct attributes sangat cepat)
   const lineLen = radius + 15; 
   const l1End = polarToCart(centerX, centerY, lineLen, line1Angle);
   const l2End = polarToCart(centerX, centerY, lineLen, line2Angle);
 
-  dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l1End.x}" y2="${l1End.y}" stroke="${secondaryColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
-  dynamicContent += `<line x1="${centerX}" y1="${centerY}" x2="${l2End.x}" y2="${l2End.y}" stroke="${dynamicColor}" stroke-width="3" class="glow-line" stroke-linecap="round" opacity="0.9"/>`;
+  els['line1'].setAttribute('x2', l1End.x);
+  els['line1'].setAttribute('y2', l1End.y);
+  els['line1'].setAttribute('stroke', secondaryColor);
 
-  const canDragLine1 = currentScenario.id === 'free';
-  const handle1Color = canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)';
-  
-  // --- VISUAL & HITBOX LINE 1 ---
-  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="12" fill="${handle1Color}" opacity="0.3" class="pulse-dot"/>`;
-  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="10" fill="${handle1Color}" opacity="${canDragLine1 ? 0.9 : 0.3}"/>`;
-  dynamicContent += `<circle cx="${l1End.x}" cy="${l1End.y}" r="4" fill="var(--bg-color)"/>`;
-  // Hitbox Ekstra Besar (r=50) diletakkan di layer paling atas
-  dynamicContent += `<circle class="hitbox" cx="${l1End.x}" cy="${l1End.y}" r="50" data-line="line1" style="${canDragLine1 ? '' : 'pointer-events:none;'}"/>`;
+  els['line2'].setAttribute('x2', l2End.x);
+  els['line2'].setAttribute('y2', l2End.y);
+  els['line2'].setAttribute('stroke', dynamicColor);
 
-  // --- VISUAL & HITBOX LINE 2 ---
-  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="12" fill="${dynamicColor}" opacity="0.3" class="pulse-dot"/>`;
-  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="10" fill="${dynamicColor}" opacity="0.9"/>`;
-  dynamicContent += `<circle cx="${l2End.x}" cy="${l2End.y}" r="4" fill="var(--bg-color)"/>`;
-  // Hitbox Ekstra Besar (r=50) diletakkan di layer paling atas
-  dynamicContent += `<circle class="hitbox" cx="${l2End.x}" cy="${l2End.y}" r="50" data-line="line2"/>`;
+  // 3. Update Gagang 1
+  ['h1-pulse', 'h1-vis', 'h1-center', 'h1-hitbox'].forEach(id => {
+    els[id].setAttribute('cx', l1End.x);
+    els[id].setAttribute('cy', l1End.y);
+  });
+  els['h1-pulse'].setAttribute('fill', handle1Color);
+  els['h1-vis'].setAttribute('fill', handle1Color);
+  els['h1-vis'].setAttribute('opacity', canDragLine1 ? "0.9" : "0.3");
+  els['h1-center'].setAttribute('stroke', handle1Color);
+  els['h1-center'].setAttribute('stroke-width', '2.5');
+  els['h1-hitbox'].style.pointerEvents = canDragLine1 ? "all" : "none";
 
-  dynamicLayer.innerHTML = dynamicContent;
+  // 4. Update Gagang 2
+  ['h2-pulse', 'h2-vis', 'h2-center', 'h2-hitbox'].forEach(id => {
+    els[id].setAttribute('cx', l2End.x);
+    els[id].setAttribute('cy', l2End.y);
+  });
+  els['h2-pulse'].setAttribute('fill', dynamicColor);
+  els['h2-vis'].setAttribute('fill', dynamicColor);
+  els['h2-center'].setAttribute('stroke', dynamicColor);
 
+  // Update UI Teks Bawah
   document.getElementById('angle-value').textContent = `${measuredAngle}°`;
   document.getElementById('angle-value').style.color = dynamicColor;
-  
   updateCalcPanels(dynamicColor);
 }
 
-// Kontrol Presisi Manual
+// ─── KONTROL PRESISI MANUAL ────────────────────────────────
 window.changeAngle = function(line, amount) {
   if(line === 'line1' && currentScenario.id !== 'free') return;
+  isAnimating = true; // Nyalakan animasi agar halus saat ditekan tombol
   
-  if(line === 'line1') {
-    line1Angle = Math.max(0, Math.min(180, line1Angle + amount));
-  } else {
-    line2Angle = Math.max(0, Math.min(180, line2Angle + amount));
-  }
-  buildProtractor();
+  if(line === 'line1') line1Angle = Math.max(0, Math.min(180, line1Angle + amount));
+  else line2Angle = Math.max(0, Math.min(180, line2Angle + amount));
+  
+  updateProtractor();
 }
 
 function updateCalcPanels(dynamicColor) {
-  const a1 = line1Angle;
-  const a2 = line2Angle;
   const measured = getMeasuredAngle();
   const secondaryColor = (window.elementSdk?.config.secondary_action) || defaultConfig.secondary_action;
-  const textColor = (window.elementSdk?.config.text_color) || defaultConfig.text_color;
-
+  
   let angleType = measured === 90 ? 'Siku-siku' : 
                   measured > 0 && measured < 90 ? 'Lancip' : 
                   measured > 90 && measured < 180 ? 'Tumpul' : 
@@ -299,41 +357,43 @@ function updateCalcPanels(dynamicColor) {
 
   const canDragLine1 = currentScenario.id === 'free';
 
+  // Desktop Card
   document.getElementById('desktop-calc-content').innerHTML = `
     <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
       <div class="text-xs opacity-60">Sisi 1</div>
-      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${secondaryColor};">${a1}°</div>
+      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${secondaryColor};">${line1Angle}°</div>
     </div>
     <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
       <div class="text-xs opacity-60">Sisi 2</div>
-      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${dynamicColor};">${a2}°</div>
+      <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${dynamicColor};">${line2Angle}°</div>
     </div>
     <div class="rounded-lg p-2 mt-1" style="background:rgba(255,255,255,0.05);">
       <div class="text-[10px] opacity-60 mb-1">Total Sudut</div>
-      <div class="font-bold text-lg" style="color:${dynamicColor};">${measured}° <span class="text-xs font-normal opacity-70">(${angleType})</span></div>
+      <div class="font-bold text-lg smooth-transition" style="color:${dynamicColor};">${measured}° <span class="text-xs font-normal opacity-70">(${angleType})</span></div>
     </div>
   `;
 
+  // Mobile Bottom Sheet
   document.getElementById('mobile-calc-content').innerHTML = `
     <div class="flex flex-col items-center gap-1 w-1/3">
       <span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 1</span> 
       <div class="flex items-center gap-2">
         <button onclick="changeAngle('line1', -1)" class="btn-precision" style="background: ${canDragLine1 ? secondaryColor+'30' : 'rgba(255,255,255,0.05)'}; color: ${canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)'};" ${!canDragLine1 ? 'disabled' : ''}>-</button>
-        <span class="text-lg w-8 text-center" style="color:${secondaryColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a1}°</span>
+        <span class="text-lg w-8 text-center" style="color:${secondaryColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${line1Angle}°</span>
         <button onclick="changeAngle('line1', 1)" class="btn-precision" style="background: ${canDragLine1 ? secondaryColor+'30' : 'rgba(255,255,255,0.05)'}; color: ${canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)'};" ${!canDragLine1 ? 'disabled' : ''}>+</button>
       </div>
     </div>
 
     <div class="flex flex-col items-center justify-center w-1/3">
       <span class="text-[10px] opacity-50 uppercase tracking-wider">Tipe Sudut</span> 
-      <div class="px-2 py-1 mt-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap" style="background: ${dynamicColor}20; color:${dynamicColor}; border: 1px solid ${dynamicColor}40;">${angleType}</div>
+      <div class="px-2 py-1 mt-1 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap smooth-transition" style="background: ${dynamicColor}20; color:${dynamicColor}; border: 1px solid ${dynamicColor}40;">${angleType}</div>
     </div>
 
     <div class="flex flex-col items-center gap-1 w-1/3">
       <span class="text-[10px] opacity-50 uppercase tracking-wider">Sisi 2</span> 
       <div class="flex items-center gap-2">
         <button onclick="changeAngle('line2', -1)" class="btn-precision" style="background: ${dynamicColor}30; color: ${dynamicColor};">-</button>
-        <span class="text-lg w-8 text-center" style="color:${dynamicColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${a2}°</span>
+        <span class="text-lg w-8 text-center smooth-transition" style="color:${dynamicColor}; font-weight:900; font-family:'JetBrains Mono', monospace;">${line2Angle}°</span>
         <button onclick="changeAngle('line2', 1)" class="btn-precision" style="background: ${dynamicColor}30; color: ${dynamicColor};">+</button>
       </div>
     </div>
@@ -342,6 +402,7 @@ function updateCalcPanels(dynamicColor) {
 
 // ─── SCENARIOS ─────────────────────────────────────────────
 function loadScenario(scenario) {
+  isAnimating = true; // Nyalakan animasi saat ganti mode
   currentScenario = scenario;
   line1Angle = scenario.line1Angle;
   line2Angle = scenario.line2Angle;
@@ -353,7 +414,7 @@ function loadScenario(scenario) {
     btn.classList.toggle('active', btn.dataset.id === scenario.id);
   });
 
-  buildProtractor();
+  updateProtractor();
 }
 
 function buildScenarioButtons() {
@@ -372,7 +433,6 @@ function buildScenarioButtons() {
 
 // ─── DRAG INTERACTION ──────────────────────────────────────
 function getAngleFromEvent(e) {
-  if (!svgRect) updateSvgDimensions(); 
   const viewBox = svgEl.viewBox.baseVal;
   const scaleX = viewBox.width / svgRect.width;
   const scaleY = viewBox.height / svgRect.height;
@@ -401,7 +461,7 @@ function getAngleFromEvent(e) {
   
   let roundedAngle = Math.round(angle);
 
-  // EFEK MAGNET KELIPATAN 5°
+  // Efek magnet kelipatan 5 derajat
   if (Math.abs(roundedAngle % 5) <= 1 || Math.abs(roundedAngle % 5) >= 4) {
     roundedAngle = Math.round(roundedAngle / 5) * 5;
   }
@@ -417,6 +477,7 @@ function onPointerDown(e) {
   const canDragLine1 = currentScenario.id === 'free';
   if (lineName === 'line1' && !canDragLine1) return;
 
+  isAnimating = false; // Matikan animasi agar instan mengikuti jari
   dragging = lineName;
   updateSvgDimensions(); 
   e.preventDefault(); 
@@ -427,11 +488,17 @@ function onPointerMove(e) {
   e.preventDefault();
 
   if (animationFrameId) cancelAnimationFrame(animationFrameId);
+  // Gunakan requestAnimationFrame untuk sync layar HP (60hz / 120hz)
   animationFrameId = requestAnimationFrame(() => {
     const angle = getAngleFromEvent(e);
-    if (dragging === 'line1') line1Angle = angle;
-    else line2Angle = angle;
-    buildProtractor(); 
+    // Hentikan proses jika sudut tidak berubah (Menghemat CPU!)
+    if (dragging === 'line1' && line1Angle !== angle) {
+        line1Angle = angle;
+        updateProtractor(); 
+    } else if (dragging === 'line2' && line2Angle !== angle) {
+        line2Angle = angle;
+        updateProtractor(); 
+    }
   });
 }
 
@@ -459,11 +526,10 @@ function applyConfig(config) {
   document.documentElement.style.setProperty('--text-color', text);
   document.documentElement.style.setProperty('--primary-action', primary);
   document.documentElement.style.setProperty('--secondary-action', secondary);
-
   document.body.style.fontFamily = `${font}, Nunito, sans-serif`;
-  document.getElementById('app-title').style.fontFamily = `${font}, Nunito, sans-serif`;
 
-  buildProtractor(true);
+  isInitialized = false; // Paksa render ulang layer statis
+  updateProtractor();
 }
 
 if (window.elementSdk) {
@@ -477,7 +543,6 @@ function init() {
   lucide.createIcons();
   buildScenarioButtons();
   setTimeout(() => { 
-      updateSvgDimensions();
       loadScenario(scenarios[0]);
   }, 50);
 }
@@ -488,7 +553,8 @@ let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    buildProtractor(true);
+    isInitialized = false; // Rebuild layer statis jika HP diputar
+    updateProtractor();
   }, 100);
 });
   </script>
