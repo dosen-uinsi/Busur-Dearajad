@@ -19,6 +19,10 @@
 
     .glow-line { filter: drop-shadow(0 0 4px currentColor); }
     
+    /* Perbaikan: Memisahkan CSS untuk garis (stroke) dan isi (fill) */
+    .angle-arc { fill: none; stroke-linecap: round; transition: stroke 0.15s ease; }
+    .angle-fill { stroke: none; transition: fill 0.15s ease; }
+    
     .smooth-transition { transition: stroke 0.15s ease, fill 0.15s ease, color 0.15s ease; }
     .anim-transform { transition: all 0.2s ease-out; }
     .no-anim { transition: none !important; }
@@ -29,7 +33,6 @@
       100% { r: 24; opacity: 0; }
     }
 
-    /* --- DESAIN TOMBOL BARU (SEGMENTED CONTROL) --- */
     .scenario-btn { 
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
       opacity: 0.6; 
@@ -81,7 +84,7 @@
 
   <div class="w-full px-4 py-3 flex-shrink-0 z-10" style="background: var(--bg-color);">
     <div id="scenario-buttons" class="grid grid-cols-2 gap-1 p-1 mx-auto w-full max-w-sm rounded-xl" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.05);">
-      </div>
+    </div>
   </div>
 
   <div class="flex-1 w-full relative min-h-[35vh]" style="background: radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 70%);">
@@ -110,8 +113,9 @@
       <p id="info-desc" class="text-xs opacity-70 leading-relaxed"></p>
     </div>
 
-    <div class="p-3 rounded-2xl flex flex-col gap-2 text-sm w-full" style="background: rgba(0,0,0,0.2);">
-      <div id="mobile-calc-content" class="w-full flex justify-between items-center px-1"></div>
+    <div class="p-3 rounded-2xl flex flex-col gap-3 text-sm w-full" style="background: rgba(0,0,0,0.2);">
+      <div id="mobile-calc-content" class="w-full flex justify-between items-start px-1"></div>
+      <div id="mobile-math-step" class="w-full text-center pt-2 mt-1" style="border-top: 1px dashed rgba(255,255,255,0.1);"></div>
     </div>
   </div>
 
@@ -142,9 +146,7 @@ let isInitialized = false;
 let animationFrameId = null;
 let isAnimating = false; 
 
-// Cache DOM Elements 
 const els = {};
-
 const svgEl = document.getElementById('protractor-svg');
 const staticLayer = document.getElementById('static-layer');
 const dynamicLayer = document.getElementById('dynamic-layer');
@@ -214,8 +216,9 @@ function initDOM() {
   }
   staticLayer.innerHTML = staticContent;
 
+  // PERBAIKAN: arc-bg sekarang menggunakan angle-fill untuk memastikan warna solid masuk
   dynamicLayer.innerHTML = `
-    <path id="arc-bg" class="angle-arc smooth-transition" stroke-width="3" opacity="0.15" />
+    <path id="arc-bg" class="angle-fill smooth-transition" opacity="0.15" />
     <path id="arc-main" class="angle-arc smooth-transition" stroke-width="3" opacity="0.6" />
     <text id="angle-text" text-anchor="middle" dominant-baseline="middle" class="glow-line smooth-transition" style="font-size:${radius > 150 ? 16 : 12}px; font-family: 'JetBrains Mono', monospace; font-weight:900;"></text>
 
@@ -254,7 +257,10 @@ function updateProtractor() {
   const canDragLine1 = currentScenario.id === 'free';
   const handle1Color = canDragLine1 ? secondaryColor : 'rgba(255,255,255,0.2)';
 
+  // Radius lengkungan garis tetap 0.35, TAPI radius arsiran/bayangan diisi 100% (sebesar radius busur)
   const arcRadius = radius * 0.35;
+  const fillRadius = radius; 
+  
   let minA = Math.min(line1Angle, line2Angle);
   let maxA = Math.max(line1Angle, line2Angle);
 
@@ -269,23 +275,25 @@ function updateProtractor() {
     els['arc-main'].style.display = 'block';
     els['angle-text'].style.display = 'block';
 
+    // PATH UNTUK BAYANGAN ARSIRAN PENUH (100% Radius)
+    const bgStart = polarToCart(centerX, centerY, fillRadius, minA);
+    const bgEnd = polarToCart(centerX, centerY, fillRadius, maxA);
+    els['arc-bg'].setAttribute('d', `M ${centerX} ${centerY} L ${bgStart.x} ${bgStart.y} A ${fillRadius} ${fillRadius} 0 0 0 ${bgEnd.x} ${bgEnd.y} Z`);
+    els['arc-bg'].setAttribute('fill', dynamicColor);
+
+    // PATH UNTUK GARIS LENGKUNGAN SIMBOL TENGAH
     if (measuredAngle === 90) {
       const sqLen = arcRadius * 0.6;
       const p1 = polarToCart(centerX, centerY, sqLen, minA);
       const p2 = polarToCart(centerX, centerY, sqLen, maxA);
       const pMid = polarToCart(centerX, centerY, sqLen * 1.414, minA + 45); 
-      
       els['arc-main'].setAttribute('d', `M ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y}`);
-      els['arc-bg'].setAttribute('d', `M ${centerX} ${centerY} L ${p1.x} ${p1.y} L ${pMid.x} ${pMid.y} L ${p2.x} ${p2.y} Z`);
     } else {
       const start = polarToCart(centerX, centerY, arcRadius, minA);
       const end = polarToCart(centerX, centerY, arcRadius, maxA);
       els['arc-main'].setAttribute('d', `M ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y}`);
-      els['arc-bg'].setAttribute('d', `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${arcRadius} ${arcRadius} 0 0 0 ${end.x} ${end.y} Z`);
     }
-
     els['arc-main'].setAttribute('stroke', dynamicColor);
-    els['arc-bg'].setAttribute('fill', dynamicColor);
 
     const midAngle = (line1Angle + line2Angle) / 2;
     const labelDist = arcRadius + (radius > 150 ? 25 : 18);
@@ -356,6 +364,8 @@ function updateCalcPanels(dynamicColor) {
                   measured === 180 ? 'Garis Lurus' : 'Sudut Nol';
 
   const canDragLine1 = currentScenario.id === 'free';
+  const maxA = Math.max(line1Angle, line2Angle);
+  const minA = Math.min(line1Angle, line2Angle);
 
   document.getElementById('desktop-calc-content').innerHTML = `
     <div class="rounded-lg p-2 flex justify-between items-center" style="background:rgba(255,255,255,0.03);">
@@ -366,9 +376,10 @@ function updateCalcPanels(dynamicColor) {
       <div class="text-xs opacity-60">Sisi 2</div>
       <div class="font-bold" style="font-family:'JetBrains Mono',monospace; color:${dynamicColor};">${line2Angle}°</div>
     </div>
-    <div class="rounded-lg p-2 mt-1" style="background:rgba(255,255,255,0.05);">
-      <div class="text-[10px] opacity-60 mb-1">Total Sudut</div>
-      <div class="font-bold text-lg smooth-transition" style="color:${dynamicColor};">${measured}° <span class="text-xs font-normal opacity-70">(${angleType})</span></div>
+    <div class="rounded-lg p-2 mt-1 flex flex-col items-center text-center" style="background:rgba(255,255,255,0.05);">
+      <div class="text-[10px] opacity-60 mb-1 uppercase tracking-wider">Perhitungan</div>
+      <div class="font-bold text-sm" style="font-family:'JetBrains Mono',monospace;">${maxA}° - ${minA}° = <span style="color:${dynamicColor}; font-size: 1.25rem;">${measured}°</span></div>
+      <div class="text-[10px] mt-1 opacity-70">(${angleType})</div>
     </div>
   `;
 
@@ -396,6 +407,13 @@ function updateCalcPanels(dynamicColor) {
       </div>
     </div>
   `;
+
+  document.getElementById('mobile-math-step').innerHTML = `
+    <div class="text-[10px] opacity-50 uppercase tracking-wider mb-1">Langkah Perhitungan</div>
+    <div class="text-sm font-bold smooth-transition" style="font-family:'JetBrains Mono', monospace;">
+      ${maxA}° - ${minA}° = <span style="color:${dynamicColor}; font-size:1.1rem;">${measured}°</span>
+    </div>
+  `;
 }
 
 // ─── SCENARIOS ─────────────────────────────────────────────
@@ -408,7 +426,6 @@ function loadScenario(scenario) {
   document.getElementById('info-title').textContent = scenario.name;
   document.getElementById('info-desc').textContent = scenario.detail;
 
-  // Update status tombol Segmented Control
   document.querySelectorAll('.scenario-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.id === scenario.id);
   });
@@ -416,13 +433,11 @@ function loadScenario(scenario) {
   updateProtractor();
 }
 
-// FUNGSI RENDER TOMBOL DENGAN GRID AGAR SIMETRIS
 function buildScenarioButtons() {
   const container = document.getElementById('scenario-buttons');
   container.innerHTML = '';
   scenarios.forEach(s => {
     const btn = document.createElement('button');
-    // Kelas 'w-full' dipadukan dengan 'grid-cols-2' di wadahnya menjamin lebar sempurna 50%
     btn.className = 'scenario-btn w-full rounded-lg py-2 text-xs md:text-sm font-bold flex items-center justify-center gap-1.5';
     btn.dataset.id = s.id;
     btn.innerHTML = `<i data-lucide="${s.icon}" style="width:16px;height:16px;"></i><span>${s.name}</span>`;
